@@ -1,4 +1,4 @@
-directory: data/matlab-filecentral
+directory: ../data/matlab-filecentral # relative to config file
 
 first_page: 1
 last_page: 370

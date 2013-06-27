@@ -39,7 +39,15 @@ sub _build__logfile {
 
 sub _build_output_directory {
 	my ($self) = @_;
-	my $d = dir($self->config->{directory});
+	my $d = dir($self->_config->{directory});
+	if($d->is_relative) {
+		my $relative_to = dir(); # current directory
+		if($self->config_file) {
+			# directory of the config file
+			$relative_to = file($self->config_file)->dir;
+		}
+		$d = $relative_to->subdir($d);
+	}
 	$d->mkpath;
 }
 
