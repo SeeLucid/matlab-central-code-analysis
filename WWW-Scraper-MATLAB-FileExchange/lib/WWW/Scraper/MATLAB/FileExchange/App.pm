@@ -4,11 +4,15 @@ use strict;
 use warnings;
 
 use WWW::Scraper::MATLAB::FileExchange;
-use YAML::XS;
+use YAML::XS qw/LoadFile/;
 use Path::Class;
 use Try::Tiny;
 use Parallel::ForkManager;
 use IPC::DirQueue;
+
+use LWP::UserAgent;
+use HTML::TreeBuilder;
+use File::Slurp qw/write_file/;
 
 use Log::Log4perl qw(:easy);
 
@@ -20,7 +24,7 @@ has config_file => ( is => 'rw' );
 
 has _config => ( is => 'lazy' );
 
-has output_directory => ( is => 'lazy' );
+has _output_directory => ( is => 'lazy' );
 
 has _result_page_directory => ( is => 'lazy' );
 has _script_directory => ( is => 'lazy' );
@@ -34,10 +38,10 @@ has _conn => ( is => 'lazy' );
 
 sub _build__logfile {
 	my ($self) = @_;
-	$self->output_directory->file('scraper.log');
+	$self->_output_directory->file('scraper.log');
 }
 
-sub _build_output_directory {
+sub _build__output_directory {
 	my ($self) = @_;
 	my $d = dir($self->_config->{directory});
 	if($d->is_relative) {
@@ -49,16 +53,22 @@ sub _build_output_directory {
 		$d = $relative_to->subdir($d);
 	}
 	$d->mkpath;
+	$d;
 }
 
-sub _build_queue {
+sub _build__queue {
+	my ($self) = @_;
+	$self->get_queue;
+}
+
+sub get_queue {
 	my ($self) = @_;
 	IPC::DirQueue->new({ dir => $self->_queue_directory });
 }
 
 sub _build__queue_directory {
 	my ($self) = @_;
-	my $d = dir($self->output_directory)->subdir('queue');
+	my $d = dir($self->_output_directory)->subdir('queue');
 	$d->mkpath;
 	$d;
 }
@@ -69,9 +79,33 @@ sub _build__config {
 	LoadFile($self->config_file);
 }
 
+sub _build__result_page_directory {
+	my ($self) = @_;
+	my $d = $self->_output_directory->subdir('result_page');
+	$d->mkpath;
+	$d;
+}
+
+sub _build__script_directory {
+	my ($self) = @_;
+	my $d = $self->_output_directory->subdir('script');
+	$d->mkpath;
+	$d;
+}
+
+sub _directory_for_script_id {
+	my ($self, $id) = @_;
+	$self->_script_directory->subdir($id);
+}
+
+sub _file_for_result_page_num {
+	my ($self, $num) = @_;
+	$self->_result_page_directory->file($num);
+}
+
 sub add_url_to_queue {
-	my ($self, $url) = @_;
-	$self->_queue->enqueue_string($url);
+	my $self = shift;
+	$self->_queue->enqueue_string(@_);
 }
 
 sub run {
@@ -87,7 +121,7 @@ sub run {
 	# add all result pages to queue
 	for my $page ($start..$stop) {
 		my $url = $scraper->url_for_search_page_num($page);
-		$self->add_url_to_queue($url);
+		$self->add_url_to_queue($url, { rez => $page });
 		INFO "inserting page $page";
 	}
 	INFO "pages from $start to $stop in queue";
@@ -101,6 +135,93 @@ sub go_forth {
 
 	# process queue [in parallel]
 	for my $id (0..MAX_PROC-1) {
+		$pm->start and next;
+		my $q = $self->get_queue;
+		my $job;
+		my $ua = LWP::UserAgent->new;
+		my $scraper = WWW::Scraper::MATLAB::FileExchange->new;
+
+		# pop off queue
+		while( $job = $q->pickup_queued_job ) {
+			my $meta = $job->{metadata} // {};
+			my $url = $job->get_data;
+			if( exists $meta->{rez} ) { # retrieve a result page
+				my $page_num = $meta->{rez};
+				INFO "processing result page number $page_num";
+				# have we already processed the page?
+				# if so, skip
+				my $file = $self->_file_for_result_page_num($page_num)->absolute;
+				unless ( -f $file ) {
+					try {
+						INFO "fetching result page $page_num";
+						my $response = $ua->get($url);
+					    LOGDIE "unable to download result page $page_num" unless $response->is_success;
+						INFO "writing result page to $file";
+						my $content = $response->decoded_content;
+						use DDP; p $content;
+						INFO "fetching all links from result page $page_num";
+						my $tree = HTML::TreeBuilder->new_from_content($content);
+						my $links = $scraper->get_result_uris_from_search_page($tree);
+
+						# add each link to queue
+						for my $link (@$links) {
+							my $script_id = $scraper->uri_to_id($link);
+							INFO "inserting script $script_id <$link> into queue";
+							$self->add_url_to_queue($link, { id => $script_id });
+						}
+
+						# write it out
+						write_file($file, $content);
+						INFO "wrote result page to $file";
+					} catch {
+						# add back to queue
+						WARN "unable to retrieve result page $page_num, enqueueing again";
+						$self->add_url_to_queue($url, $meta);
+					};
+				} else {
+					INFO "SKIP: result page $page_num already processed";
+				}
+			} elsif( exists $meta->{id} ) { # retrive a script
+				my $script_id = $meta->{id};
+
+				my $dir = $self->_directory_for_script_id($script_id)->absolute;
+				# have we already downloaded the script?
+				# if so, skip
+				unless( -d $dir ) {
+					try {
+						my $desc_uri = $scraper->id_to_desc_uri($script_id);
+						my $down_uri = $scraper->id_to_download_uri($script_id);
+
+						INFO "fetching script $script_id";
+						INFO "download script $script_id desc. page";
+						my $desc_response = $ua->get($desc_uri);
+						INFO "download script $script_id file";
+						my $down_response = $ua->get($down_uri);
+						
+						LOGDIE "unable to download script $script_id"
+							unless $desc_response->is_success and $down_response->is_success;
+						INFO "writing script $script_id to disk";
+						$dir->mkpath;
+						# write to disk
+						my $desc_filename = $dir->file("$script_id.desc");
+
+						my $down_name  = $down_response->filename // "$script_id.download";
+						my $clean_name = $down_name =~ s/[\0\/]//gr;
+						my $down_filename = $dir->file($down_name);
+						write_file($desc_filename, $desc_response->decoded_content);
+						write_file($down_filename, {binmode => ':raw'}, $down_response->decoded_content);
+						INFO "wrote script $script_id to disk";
+					} catch {
+						# add back to queue
+						WARN "unable to retrieve script $script_id, enqueueing again";
+						$self->add_url_to_queue($url, $meta);
+					};
+				} else {
+					INFO "SKIP: script $script_id already processed";
+				}
+			}
+		}
+		$pm->finish; # do the exit in the child process
 	}
 
 	$pm->wait_all_children;
