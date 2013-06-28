@@ -161,7 +161,6 @@ sub go_forth {
 					    LOGDIE "unable to download result page $page_num" unless $response->is_success;
 						INFO "writing result page to $file";
 						my $content = $response->decoded_content;
-						use DDP; p $content;
 						INFO "fetching all links from result page $page_num";
 						my $tree = HTML::TreeBuilder->new_from_content($content);
 						my $links = $scraper->get_result_uris_from_search_page($tree);
