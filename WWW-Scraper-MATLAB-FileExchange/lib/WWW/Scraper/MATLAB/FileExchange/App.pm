@@ -173,7 +173,7 @@ sub go_forth {
 						}
 
 						# write it out
-						write_file($file, $content);
+						write_file($file, {binmode => ':utf8'}, $content);
 						INFO "wrote result page to $file";
 					} catch {
 						# add back to queue
@@ -212,7 +212,7 @@ sub go_forth {
 						my $down_name  = $down_response->filename // "$script_id.download";
 						my $clean_name = $down_name =~ s/[\0\/]//gr;
 						my $down_filename = $dir->file($down_name);
-						write_file($desc_filename, $desc_response->decoded_content);
+						write_file($desc_filename, {binmode => ':utf8'}, $desc_response->decoded_content);
 						write_file($down_filename, {binmode => ':raw'}, $down_response->decoded_content);
 						INFO "wrote script $script_id to disk";
 					} catch {
