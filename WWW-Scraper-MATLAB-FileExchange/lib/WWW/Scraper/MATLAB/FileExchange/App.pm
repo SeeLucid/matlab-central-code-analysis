@@ -16,6 +16,8 @@ use File::Slurp qw/write_file/;
 
 use Log::Log4perl qw(:easy);
 
+use Time::HiRes qw(sleep);
+
 use Moo;
 
 use constant MAX_PROC => 10;
@@ -220,6 +222,9 @@ sub go_forth {
 					INFO "SKIP: script $script_id already processed";
 				}
 			}
+
+			# sleeping on the job
+			sleep( rand(10) + 5  );
 		}
 		$pm->finish; # do the exit in the child process
 	}
