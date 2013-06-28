@@ -147,6 +147,7 @@ sub go_forth {
 		while( $job = $q->pickup_queued_job ) {
 			my $meta = $job->{metadata} // {};
 			my $url = $job->get_data;
+			my $downloaded = 1; # we assume that this iteration will download
 			if( exists $meta->{rez} ) { # retrieve a result page
 				my $page_num = $meta->{rez};
 				INFO "processing result page number $page_num";
@@ -182,6 +183,7 @@ sub go_forth {
 					};
 				} else {
 					INFO "SKIP: result page $page_num already processed";
+					$downloaded = 0;
 				}
 			} elsif( exists $meta->{id} ) { # retrive a script
 				my $script_id = $meta->{id};
@@ -220,11 +222,12 @@ sub go_forth {
 					};
 				} else {
 					INFO "SKIP: script $script_id already processed";
+					$downloaded = 0;
 				}
 			}
 
 			# sleeping on the job
-			sleep( rand(10) + 5  );
+			sleep( rand(10) + 5  ) if $downloaded;
 		}
 		$pm->finish; # do the exit in the child process
 	}
