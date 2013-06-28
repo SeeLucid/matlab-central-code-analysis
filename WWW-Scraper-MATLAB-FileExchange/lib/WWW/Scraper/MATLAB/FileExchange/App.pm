@@ -207,7 +207,7 @@ sub go_forth {
 						INFO "writing script $script_id to disk";
 						$dir->mkpath;
 						# write to disk
-						my $desc_filename = $dir->file("$script_id.desc");
+						my $desc_filename = $dir->file("$script_id.desc.html");
 
 						my $down_name  = $down_response->filename // "$script_id.download";
 						my $clean_name = $down_name =~ s/[\0\/]//gr;
