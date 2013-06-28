@@ -140,7 +140,7 @@ sub go_forth {
 		$pm->start and next;
 		my $q = $self->get_queue;
 		my $job;
-		my $ua = LWP::UserAgent->new;
+		my $ua = LWP::UserAgent->new( agent => 'sloth/0.001' );
 		my $scraper = WWW::Scraper::MATLAB::FileExchange->new;
 
 		# pop off queue
