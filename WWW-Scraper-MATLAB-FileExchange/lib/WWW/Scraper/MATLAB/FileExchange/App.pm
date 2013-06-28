@@ -177,7 +177,7 @@ sub go_forth {
 						INFO "wrote result page to $file";
 					} catch {
 						# add back to queue
-						WARN "unable to retrieve result page $page_num, enqueueing again";
+						WARN "unable to retrieve result page $page_num, enqueueing again: $_";
 						$file->remove;
 						$self->add_url_to_queue($url, $meta);
 					};
@@ -202,7 +202,7 @@ sub go_forth {
 						INFO "download script $script_id file";
 						my $down_response = $ua->get($down_uri);
 						
-						LOGDIE "unable to download script $script_id"
+						LOGDIE "unable to download script $script_id: [$desc_response->status_line, $down_response->status_line]"
 							unless $desc_response->is_success and $down_response->is_success;
 						INFO "writing script $script_id to disk";
 						$dir->mkpath;
@@ -217,7 +217,7 @@ sub go_forth {
 						INFO "wrote script $script_id to disk";
 					} catch {
 						# add back to queue
-						WARN "unable to retrieve script $script_id, enqueueing again";
+						WARN "unable to retrieve script $script_id, enqueueing again: $_";
 						$dir->rmtree;
 						$self->add_url_to_queue($url, $meta);
 					};
