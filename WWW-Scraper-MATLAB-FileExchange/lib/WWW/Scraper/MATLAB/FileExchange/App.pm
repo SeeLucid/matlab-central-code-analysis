@@ -154,7 +154,7 @@ sub go_forth {
 				# have we already processed the page?
 				# if so, skip
 				my $file = $self->_file_for_result_page_num($page_num)->absolute;
-				unless ( -f $file ) {
+				unless ( -f $file and not -z $file ) {
 					try {
 						INFO "fetching result page $page_num";
 						my $response = $ua->get($url);
@@ -179,6 +179,7 @@ sub go_forth {
 					} catch {
 						# add back to queue
 						WARN "unable to retrieve result page $page_num, enqueueing again";
+						$file->remove;
 						$self->add_url_to_queue($url, $meta);
 					};
 				} else {
@@ -218,6 +219,7 @@ sub go_forth {
 					} catch {
 						# add back to queue
 						WARN "unable to retrieve script $script_id, enqueueing again";
+						$dir->rmtree;
 						$self->add_url_to_queue($url, $meta);
 					};
 				} else {
