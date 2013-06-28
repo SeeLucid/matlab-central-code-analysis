@@ -158,7 +158,8 @@ sub go_forth {
 					try {
 						INFO "fetching result page $page_num";
 						my $response = $ua->get($url);
-					    LOGDIE "unable to download result page $page_num" unless $response->is_success;
+						LOGDIE "unable to download result page $page_num @{[$response->status_line]}"
+							unless $response->is_success;
 						INFO "writing result page to $file";
 						my $content = $response->decoded_content;
 						INFO "fetching all links from result page $page_num";
@@ -202,7 +203,7 @@ sub go_forth {
 						INFO "download script $script_id file";
 						my $down_response = $ua->get($down_uri);
 						
-						LOGDIE "unable to download script $script_id: [$desc_response->status_line, $down_response->status_line]"
+						LOGDIE "unable to download script $script_id: [@{[$desc_response->status_line]}, @{[$down_response->status_line]}]"
 							unless $desc_response->is_success and $down_response->is_success;
 						INFO "writing script $script_id to disk";
 						$dir->mkpath;
