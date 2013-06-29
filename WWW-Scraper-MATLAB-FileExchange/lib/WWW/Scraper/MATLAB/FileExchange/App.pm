@@ -199,6 +199,13 @@ sub go_forth {
 				# have we already downloaded the script?
 				# if so, skip
 				unless( -d $dir ) {
+					if ( exists $self->_config->{skip_script}
+						and exists $self->_config->{skip_script}{$script_id} ) {
+						INFO "SKIP: script $script_id skipped from config file";
+						$downloaded = 0;
+						$job->finish;
+						next;
+					}
 					try {
 						my $desc_uri = $scraper->id_to_desc_uri($script_id);
 						my $down_uri = $scraper->id_to_download_uri($script_id);
