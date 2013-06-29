@@ -176,14 +176,16 @@ sub go_forth {
 						# write it out
 						write_file($file, {binmode => ':utf8'}, $content);
 						INFO "wrote result page to $file";
+						$job->finish;
 					} catch {
 						# add back to queue
 						WARN "unable to retrieve result page $page_num, enqueueing again: $_";
 						$file->remove;
-						$self->add_url_to_queue($url, $meta);
+						$job->return_to_queue;
 					};
 				} else {
 					INFO "SKIP: result page $page_num already processed";
+					$job->finish;
 					$downloaded = 0;
 				}
 			} elsif( exists $meta->{id} ) { # retrive a script
@@ -216,14 +218,16 @@ sub go_forth {
 						write_file($desc_filename, {binmode => ':utf8'}, $desc_response->decoded_content);
 						write_file($down_filename, {binmode => ':raw'}, $down_response->decoded_content);
 						INFO "wrote script $script_id to disk";
+						$job->finish;
 					} catch {
 						# add back to queue
 						WARN "unable to retrieve script $script_id, enqueueing again: $_";
 						$dir->rmtree;
-						$self->add_url_to_queue($url, $meta);
+						$job->return_to_queue;
 					};
 				} else {
 					INFO "SKIP: script $script_id already processed";
+					$job->finish;
 					$downloaded = 0;
 				}
 			}
