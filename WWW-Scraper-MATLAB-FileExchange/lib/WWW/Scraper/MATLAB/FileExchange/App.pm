@@ -174,7 +174,11 @@ sub go_forth {
 						}
 
 						# write it out
-						write_file($file, {binmode => ':utf8'}, $content);
+						try {
+							write_file($file, {binmode => ':utf8'}, $content);
+						} catch {
+							LOGCONFESS "could not write result page $page_num: $_";
+						};
 						INFO "wrote result page to $file";
 						$job->finish;
 					} catch {
@@ -215,8 +219,16 @@ sub go_forth {
 						my $down_name  = $down_response->filename // "$script_id.download";
 						my $clean_name = $down_name =~ s/[\0\/]//gr;
 						my $down_filename = $dir->file($down_name);
-						write_file($desc_filename, {binmode => ':utf8'}, $desc_response->decoded_content);
-						write_file($down_filename, {binmode => ':raw'}, $down_response->decoded_content);
+						try {
+							write_file($desc_filename, {binmode => ':utf8'}, $desc_response->decoded_content);
+						} catch {
+							LOGCONFESS "could not write script $script_id description: $_";
+						};
+						try {
+							write_file($down_filename, {binmode => ':raw'}, $down_response->content);
+						} catch {
+							LOGCONFESS "could not write script $script_id file: $_";
+						};
 						INFO "wrote script $script_id to disk";
 						$job->finish;
 					} catch {
