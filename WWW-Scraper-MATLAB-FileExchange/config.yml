@@ -2,3 +2,7 @@ directory: ../data/matlab-filecentral # relative to config file
 
 first_page: 1
 last_page: 370
+
+skip_script:
+  23521: 1 # HTTP 404 on script file (vis2009)
+  23531: 1 # HTTP 404 on script file (3D Type of Graphic)
